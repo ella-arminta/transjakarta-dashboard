@@ -14,7 +14,7 @@
 
       <section class="content">
         <div class="left-content">
-            <h1>Transjakarta Analysis for Passangers</h1>
+            <h1>Transjakarta Analysis for Premium Bus</h1>
 
           
         </div>
