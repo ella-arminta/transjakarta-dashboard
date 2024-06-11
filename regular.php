@@ -19,15 +19,12 @@
           
         </div>
 
-        <div class="right-content">
-          
-          
+        <div class="right-content"></div>
 
-          
 
-          
+  
         </div>
-      </section>
+    </section>
     </main>
 
     <script src="https://kit.fontawesome.com/e52db3bf8a.js" crossorigin="anonymous"></script>
@@ -44,6 +41,6 @@
         });
         });
 
-    </script>
-  </body>
+     </script>
+    </body>
 </html>
