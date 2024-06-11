@@ -25,6 +25,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET') {
                     $result = $stmt->fetch();
                     
                     if ($result) {
+                      // get rata-rata pengeluaran waktu
+                      // 
+                      
                         echo json_encode($result);
                     } else {
                         echo json_encode([]);
