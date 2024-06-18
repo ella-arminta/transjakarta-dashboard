@@ -215,7 +215,7 @@ include 'api/mysql_connection.php'
               </div>
             </div>
             <!-- #1 Analisis Pengelompokan User berdasarkan jumlah naik per bulannya -->
-            <h5 style="color:#787878;padding-left: 1%;padding-right: 1%;padding-top:10px; text-align:center">Pengelompokan Jumlah User berdasarkan jumlah transaksi</h5>
+            <h5 style="color:#787878;padding-left: 1%;padding-right: 1%;padding-top:10px; text-align:center">Pengelompokan User berdasarkan rata-rata jumlah transaksi perbulan</h5>
             <div style="">
               <canvas id="PieChart" style="width: 80%;"></canvas>
             </div>
@@ -223,13 +223,13 @@ include 'api/mysql_connection.php'
 
           <div class="col-7" style="padding-top: 0;">
             <!-- #2 Analisis perbandingan Premium dan Regular Per bulan -->
-            <h5 style="color:#787878;padding-left: 5%;padding-right: 5%;padding-top:10px; text-align:center">Jumlah Transaksi berdasarkan Tipe Bis dan bulan</h5>
+            <h5 style="color:#787878;padding-left: 5%;padding-right: 5%;padding-top:10px; text-align:center">Trend Transaksi berdasarkan Tipe Bis dan bulan</h5>
             <div style="padding-left: 10%;padding-right: 10%;">
               <canvas id="LineChartPremReg"></canvas>
             </div>
 
             <!-- #3 Jumlah Transaksi berdasarkan Tipe Bus yang sering digunakan dan Agenya -->
-            <h5 style="color:#787878;padding-left: 5%;padding-right: 5%;padding-top:10px; text-align:center">Jumlah Transaksi berdasarkan Tipe Bus yang sering digunakan dan Agenya</h5>
+            <h5 style="color:#787878;padding-left: 5%;padding-right: 5%;padding-top:10px; text-align:center">Jumlah Transaksi berdasarkan Tipe Bus yang sering digunakan dan Usia</h5>
             <div style="padding-left: 10%;padding-right: 10%;">
               <canvas id="BarChartPremReg"></canvas>
             </div>
@@ -238,6 +238,7 @@ include 'api/mysql_connection.php'
       </div>
 
       <!-- #5 Tipe Umur dan waktu -->
+       
       <!-- Row 3 -->
       <div class="row content" style="margin: 15px;">
         <!-- Year and Hour Filter -->
@@ -268,6 +269,8 @@ include 'api/mysql_connection.php'
         <!-- #4 Top 30 Destination Popularity by time -->
         <h5 style="color:#787878;padding-left: 5%;padding-right: 5%;padding-top:10px; text-align:center">Top 30 Destinasi Terpopular berdasarkan waktu</h5>
         <div id="map"></div>
+
+        <!-- #6 Persebaran perempuan dan laki-laki berdasarkan tapInTime -->
       </div>
     </section>
   </main>
