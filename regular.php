@@ -1,12 +1,15 @@
 <?php
-require_once 'C:\xampp\htdocs\transjakarta-dashboard\vendor\autoload.php';
+require_once __DIR__ . '/vendor/autoload.php';
 
-$client = new MongoDB\Client();
+use MongoDB\Client;
+
+$client = new Client();
 $transjakarta = $client->pdds->dftransjakarta;
 
 $year = isset($_GET['year']) ? intval($_GET['year']) : 2022;
 
-$pipeline = [
+/// Query for top 5 stops per hour
+$pipelineStops = [
     [
         '$match' => [
             'year' => $year,
@@ -54,15 +57,139 @@ $pipeline = [
     ]
 ];
 
-$result = $transjakarta->aggregate($pipeline);
+$resultStops = $transjakarta->aggregate($pipelineStops);
 
 $hourlyTopStops = [];
-foreach ($result as $doc) {
+foreach ($resultStops as $doc) {
     $hourlyTopStops[$doc['hourIn']] = $doc['stops'];
 }
 
 $hourlyTopStopsJson = json_encode($hourlyTopStops);
 echo "<script>const hourlyTopStops = $hourlyTopStopsJson;</script>";
+
+// Query for top 5 cards used by age group and gender
+$pipelineCards = 
+    [
+        [
+            '$match' => [
+                'year' => $year,
+                'payAmount' => ['$in' => [0, 3500]]
+            ]
+        ],
+        [
+            '$lookup' => [
+                'from' => 'dfpaycards',
+                'localField' => 'payCardID',
+                'foreignField' => 'payCardIDTable',
+                'as' => 'payCardDetails'
+            ]
+        ],
+        [
+            '$unwind' => '$payCardDetails'
+        ],
+        [
+            '$group' => [
+                '_id' => [
+                    'payCardBank' => '$payCardDetails.payCardBank',
+                    'ageGroup' => [
+                        '$switch' => [
+                            'branches' => [
+                                [
+                                    'case' => [
+                                        '$and' => [
+                                            ['$gte' => ['$payCardDetails.payCardBirthDate', 2000]],
+                                            ['$lte' => ['$payCardDetails.payCardBirthDate', 2007]]
+                                        ]
+                                    ],
+                                    'then' => '18-25'
+                                ],
+                                [
+                                    'case' => [
+                                        '$and' => [
+                                            ['$gte' => ['$payCardDetails.payCardBirthDate', 1990]],
+                                            ['$lte' => ['$payCardDetails.payCardBirthDate', 1999]]
+                                        ]
+                                    ],
+                                    'then' => '26-35'
+                                ],
+                                [
+                                    'case' => [
+                                        '$and' => [
+                                            ['$gte' => ['$payCardDetails.payCardBirthDate', 1980]],
+                                            ['$lte' => ['$payCardDetails.payCardBirthDate', 1989]]
+                                        ]
+                                    ],
+                                    'then' => '36-45'
+                                ],
+                                [
+                                    'case' => [
+                                        '$and' => [
+                                            ['$gte' => ['$payCardDetails.payCardBirthDate', 1970]],
+                                            ['$lte' => ['$payCardDetails.payCardBirthDate', 1979]]
+                                        ]
+                                    ],
+                                    'then' => '46-55'
+                                ],
+                                [
+                                    'case' => ['$gte' => ['$payCardDetails.payCardBirthDate', 1965]],
+                                    'then' => '56+'
+                                ],
+                            ],
+                        ]
+                    ]
+                ],
+                'totalUsage' => ['$sum' => 1]
+            ]
+        ],
+        [
+            '$sort' => [
+                '_id.ageGroup' => 1,
+                'totalUsage' => -1
+            ]
+        ],
+        [
+            '$group' => [
+                '_id' => '$_id.ageGroup',
+                'banks' => [
+                    '$push' => [
+                        'payCardBank' => '$_id.payCardBank',
+                        'totalUsage' => '$totalUsage'
+                    ]
+                ]
+            ]
+        ],
+        [
+            '$project' => [
+                '_id' => 0,
+                'ageGroup' => '$_id',
+                'banks' => ['$slice' => ['$banks', 5]]
+            ]
+        ],
+        [
+            '$sort' => [
+                'ageGroup' => 1
+            ]
+        ]
+    ];
+    
+
+
+$resultCards = $transjakarta->aggregate($pipelineCards);
+
+$usageData = [];
+foreach ($resultCards as $doc) {
+    $ageGroup = $doc['_id']['ageGroup'];
+    $gender = $doc['_id']['gender'];
+    $count = $doc['totalUsage'];
+
+    if (!isset($usageData[$ageGroup])) {
+        $usageData[$ageGroup] = ['Male' => 0, 'Female' => 0];
+    }
+    $usageData[$ageGroup][$gender] = $count;
+}
+
+$usageDataJson = json_encode($usageData);
+echo "<script>const usageData = $usageDataJson;</script>";
 echo "<script>const selectedYear = $year;</script>";
 ?>
 <!DOCTYPE html>
@@ -92,6 +219,9 @@ echo "<script>const selectedYear = $year;</script>";
                 <div class="chart-container" style="width: 80%; height: 600px;">
                     <canvas id="hourlyTopStopsChart"></canvas>
                 </div>
+                <div class="chart-container" style="width: 80%; height: 600px; margin-top: 50px;">
+                    <canvas id="usageChart"></canvas>
+                </div>
             </div>
         </section>
     </main>
@@ -115,16 +245,18 @@ echo "<script>const selectedYear = $year;</script>";
         }
 
         document.addEventListener("DOMContentLoaded", function() {
-            const ctx = document.getElementById('hourlyTopStopsChart').getContext('2d');
+            const ctxStops = document.getElementById('hourlyTopStopsChart').getContext('2d');
+            const ctxCards = document.getElementById('usageChart').getContext('2d');
 
+            // Chart for top 5 stops per hour
             const hours = Object.keys(hourlyTopStops);
-            const datasets = [];
+            const datasetsStops = [];
 
             for (let i = 0; i < 5; i++) {
                 const stopCounts = hours.map(hour => hourlyTopStops[hour][i] ? hourlyTopStops[hour][i].count : 0);
                 const stopNames = hours.map(hour => hourlyTopStops[hour][i] ? hourlyTopStops[hour][i].tapInStopsName : '');
                 
-                datasets.push({
+                datasetsStops.push({
                     label: `Stop ${i+1}`,
                     data: stopCounts,
                     backgroundColor: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, 0.2)`,
@@ -140,11 +272,11 @@ echo "<script>const selectedYear = $year;</script>";
                 });
             }
 
-            const config = {
+            const configStops = {
                 type: 'bar',
                 data: {
                     labels: hours,
-                    datasets: datasets
+                    datasets: datasetsStops
                 },
                 options: {
                     plugins: {
@@ -180,8 +312,70 @@ echo "<script>const selectedYear = $year;</script>";
                 }
             };
 
-            const hourlyTopStopsChart = new Chart(ctx, config);
+            const hourlyTopStopsChart = new Chart(ctxStops, configStops);
+
+            // Chart for top 5 cards used by age group and gender
+            const ageGroups = Object.keys(usageData);
+            const maleData = ageGroups.map(ageGroup => usageData[ageGroup].Male);
+            const femaleData = ageGroups.map(ageGroup => usageData[ageGroup].Female);
+
+            const configCards = {
+                type: 'bar',
+                data: {
+                    labels: ageGroups,
+                    datasets: [
+                        {
+                            label: 'Male',
+                            data: maleData,
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Female',
+                            data: femaleData,
+                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Transaction Count by Age Group and Gender in Year ${selectedYear}`
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.dataset.label || '';
+                                    return `${label}: ${context.raw}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Age Group'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Transaction Count'
+                            },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            };
+
+            const usageChart = new Chart(ctxCards, configCards);
         });
     </script>
 </body>
 </html>
+
