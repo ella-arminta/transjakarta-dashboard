@@ -100,7 +100,7 @@ try {
       <div class="left-content" style="grid-template-rows: 10% 90%;">
         <h1>Transjakarta Analysis for Premium Bus</h1>
 
-        <div class="container mt-5" style="height : 600px;">
+        <div class="container mt-5" style="height : 800px;">
           <h1>Customer Count Per Month</h1>
           <form method="GET" class="mb-4">
             <div class="row">
@@ -231,11 +231,144 @@ try {
                         ?>
                     </tbody>
                 </table>
+                <title>Transaction Visualization</title>
+    <?php
+require_once __DIR__ . '/vendor/autoload.php';
+
+//use MongoDB\Client;
+
+// Menghubungkan ke MongoDB
+$client = new Client();
+$transjakarta = $client->projekpdds->dftransjakarta;
+
+// Variabel untuk menyimpan nilai default bulan dan tahun
+$selectedMonth = isset($_POST['month']) ? (int) $_POST['month'] : 1; // Default bulan Januari
+$selectedYear = isset($_POST['year']) ? (int) $_POST['year'] : date('Y'); // Default tahun saat ini
+
+// Pilihan bulan dan tahun
+$months = [
+    1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
+    5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
+    9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December'
+];
+
+$years = range(date('Y') - 2, date('Y') - 1);
+
+// Pipeline MongoDB
+$pipeline = [
+    [
+        '$match' => [
+            "month" => $selectedMonth,
+            "year" => $selectedYear
+        ]
+    ],
+    [
+        '$group' => [
+            '_id' => '$payCardID',
+            'count' => ['$sum' => 1]
+        ]
+    ],
+    [
+        '$sort' => ['count' => -1]
+    ],
+    [
+        '$facet' => [
+            'maxCustomer' => [
+                ['$limit' => 1],
+                [
+                    '$group' => [
+                        '_id' => null,
+                        'customer' => ['$first' => '$_id'],
+                        'count' => ['$first' => '$count']
+                    ]
+                ]
+            ],
+            'minCustomer' => [
+                ['$sort' => ['count' => 1]],
+                ['$limit' => 1],
+                [
+                    '$group' => [
+                        '_id' => null,
+                        'customer' => ['$first' => '$_id'],
+                        'count' => ['$first' => '$count']
+                    ]
+                ]
+            ]
+        ]
+    ]
+];
+
+// Eksekusi pipeline MongoDB
+$result = $transjakarta->aggregate($pipeline)->toArray();
+
+// Memproses hasil
+$maxCustomer = isset($result[0]->maxCustomer[0]) ? $result[0]->maxCustomer[0] : null;
+$minCustomer = isset($result[0]->minCustomer[0]) ? $result[0]->minCustomer[0] : null;
+
+// Data untuk visualisasi
+$data = [
+    ['Customer', 'Count'],
+    ['Max Customer', $maxCustomer ? $maxCustomer->count : 0],
+    ['Min Customer', $minCustomer ? $minCustomer->count : 0]
+];
+
+// Konversi data ke format JSON
+$jsonData = json_encode($data);
+
+?>
+    <!-- Memuat Google Charts -->
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+        google.charts.load('current', {'packages':['corechart']});
+        google.charts.setOnLoadCallback(drawChart);
+
+        function drawChart() {
+            var data = google.visualization.arrayToDataTable(<?php echo $jsonData; ?>);
+
+            var options = {
+                title: 'Transaction Count for Max and Min Customers',
+                chartArea: {width: '50%'},
+                hAxis: {
+                    title: 'Count',
+                    minValue: 0
+                },
+                vAxis: {
+                    title: 'Customer'
+                }
+            };
+
+            var chart = new google.visualization.BarChart(document.getElementById('chart_div'));
+
+            chart.draw(data, options);
+        }
+    </script>
+</head>
+<body>
+    <h2>Transaction Count</h2>
+    <form method="post">
+        <label for="month">Month:</label>
+        <select id="month" name="month">
+            <?php foreach ($months as $key => $value): ?>
+                <option value="<?php echo $key; ?>" <?php if ($key == $selectedMonth) echo 'selected="selected"'; ?>><?php echo $value; ?></option>
+            <?php endforeach; ?>
+        </select>
+
+        <label for="year">Year:</label>
+        <select id="year" name="year">
+            <?php foreach ($years as $year): ?>
+                <option value="<?php echo $year; ?>" <?php if ($year == $selectedYear) echo 'selected="selected"'; ?>><?php echo $year; ?></option>
+            <?php endforeach; ?>
+        </select>
+
+        <input type="submit" value="Submit">
+    </form>
+
+    <div id="chart_div" style="width: 400px; height: 200px;"></div>
         </div>
       </div>
 
       <div class="right-content">
-        <h2 style="font-size: 125%;">Customer Performance Comparison</h2>
+        <h2 style="font-size: 125%;">Customer Performance Comparison TM vs LM</h2>
         <table id="customerPerformanceTable">
           <thead>
             <tr>
