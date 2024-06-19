@@ -5,6 +5,8 @@ use MongoDB\Client;
 
 $client = new Client();
 $transjakarta = $client->pdds->dftransjakarta;
+// $transjakarta = $client->pdds->transjakarta;
+$transjakarta = $client->transjakarta->transaction3;
 
 $year = isset($_GET['year']) ? intval($_GET['year']) : 2022;
 
