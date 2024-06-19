@@ -5,8 +5,7 @@ use MongoDB\Client;
 
 try {
     $client = new Client();
-    // $transjakarta = $client->projekpdds->dftransjakarta;
-    $transjakarta = $client->transjakarta->transaction3;
+    $transjakarta = $client->projekpdds->dftransjakarta;
 
     // Default to current year and month if not provided
     $currentYear = date('Y');
@@ -189,8 +188,7 @@ try {
                         //use MongoDB\Client;
 
                         $client = new Client();
-                        // $transjakarta = $client->projekpdds->dftransjakarta;
-                        $transjakarta = $client->transjakarta->transaction3;
+                        $transjakarta = $client->projekpdds->dftransjakarta;
 
                         // Initialize default month (if not set)
                         $selectedMonth = isset($_GET['months']) ? intval($_GET['months']) : null;
@@ -254,7 +252,7 @@ $months = [
     9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December'
 ];
 
-$years = range(date('Y') - 2, date('Y') - 1);
+$years = range(date('Y') - 2, date('Y') - 1); // Opsi untuk 10 tahun sebelumnya dan 10 tahun ke depan dari tahun saat ini
 
 // Pipeline MongoDB
 $pipeline = [
@@ -370,7 +368,7 @@ $jsonData = json_encode($data);
       </div>
 
       <div class="right-content">
-        <h2 style="font-size: 125%;">Customer Performance Comparison TM vs LM</h2>
+        <h2 style="font-size: 125%;">Customer Performance Comparison</h2>
         <table id="customerPerformanceTable">
           <thead>
             <tr>
