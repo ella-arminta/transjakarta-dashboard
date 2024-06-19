@@ -5,7 +5,8 @@ use MongoDB\Client;
 
 try {
     $client = new Client();
-    $transjakarta = $client->projekpdds->dftransjakarta;
+    // $transjakarta = $client->projekpdds->dftransjakarta;
+    $transjakarta = $client->transjakarta->transaction3;
 
     // Default to current year and month if not provided
     $currentYear = date('Y');
@@ -188,7 +189,8 @@ try {
                         //use MongoDB\Client;
 
                         $client = new Client();
-                        $transjakarta = $client->projekpdds->dftransjakarta;
+                        // $transjakarta = $client->projekpdds->dftransjakarta;
+                        $transjakarta = $client->transjakarta->transaction3;
 
                         // Initialize default month (if not set)
                         $selectedMonth = isset($_GET['months']) ? intval($_GET['months']) : null;

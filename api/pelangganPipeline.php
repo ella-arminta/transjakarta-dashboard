@@ -813,4 +813,42 @@ function getDestinasiPopuler($year, $hour, $jenisKelamin) {
     ]);
     return $pipeline;
 }
+
+function getGroupByJenisKelaminAge(){
+    $pipeline = [
+        [
+            '$project' => [
+                'payCardSex' => 1,
+                'age' => 1  // Retrieve the first element of the array
+            ]
+        ],
+        [
+            '$group' => [
+                '_id' => [
+                    'ageGroup' => [
+                        '$switch' => [
+                            'branches' => [
+                                ['case' => ['$lte' => ['$age', 17]], 'then' => '0-17'],
+                                ['case' => ['$and' => [['$gt' => ['$age', 17]], ['$lte' => ['$age', 25]]]], 'then' => '18-25'],
+                                ['case' => ['$and' => [['$gt' => ['$age', 25]], ['$lte' => ['$age', 35]]]], 'then' => '26-35'],
+                                ['case' => ['$and' => [['$gt' => ['$age', 35]], ['$lte' => ['$age', 45]]]], 'then' => '36-45'],
+                                ['case' => ['$and' => [['$gt' => ['$age', 45]], ['$lte' => ['$age', 55]]]], 'then' => '46-55'],
+                                ['case' => ['$gt' => ['$age', 55]], 'then' => '55+']
+                            ],
+                            'default' => 'Unknown'
+                        ]
+                    ],
+                    'payCardSex' => '$payCardSex'
+                ],
+                'count' => ['$sum' => 1]
+            ]
+        ],
+        [
+            '$sort' => [
+                '_id.ageGroup' => 1
+            ]
+        ]
+    ];    
+    return $pipeline;
+}
 ?>

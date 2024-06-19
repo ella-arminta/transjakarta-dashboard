@@ -173,11 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET') {
             '26-35' => 0,
             '36-45' => 0,
             '46-55' => 0,
-            '56-65' => 0,
-            '66-75' => 0,
-            '76-85' => 0,
-            '86-95' => 0,
-            '96-105' => 0,
+            '55+' => 0,
         ];
         $hasilRegular = [
             '0-17' => 0,
@@ -185,11 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET') {
             '26-35' => 0,
             '36-45' => 0,
             '46-55' => 0,
-            '56-65' => 0,
-            '66-75' => 0,
-            '76-85' => 0,
-            '86-95' => 0,
-            '96-105' => 0,
+            '55+' => 0,
         ];
 
         foreach ($result1 as $document) {
@@ -211,6 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET') {
     else if(isset($_GET['type']) && $_GET['type'] == '#4'){
         $year = $_GET['year'];
         $hour = $_GET['hour'];
+        $jenisKelamin = $_GET['jenisKelamin'];
 
         // Connect to MongoDB
         $client = new MongoClient('mongodb://localhost:27017');
@@ -218,7 +211,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET') {
         $collection = $database->selectCollection('transaction3');
 
         // DestinasiPopuler
-        $pipeline = getDestinasiPopuler($year,$hour, 'semua');
+        $pipeline = getDestinasiPopuler($year,$hour, $jenisKelamin);
         $result1 = $collection->aggregate($pipeline);
         $hasil = [];
         foreach ($result1 as $document) {
@@ -232,6 +225,129 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET') {
 
         echo json_encode($hasil);
     }
+    else if (isset($_GET['type']) && $_GET['type'] == '#5'){
+        $client = new MongoClient('mongodb://localhost:27017');
+        $database = $client->selectDatabase('transjakarta');
+        $collection = $database->selectCollection('transaction3');
+        $year = $_GET['year'];
+        $pipeline =  [
+            [
+                '$addFields' => [
+                    'tapInTime' => [
+                        '$dateFromString' => [
+                            'dateString' => '$tapInTime',
+                            'format' => '%Y-%m-%d %H:%M:%S'
+                        ]
+                    ]
+                ]
+            ],
+            [
+                '$match' => [
+                    'year' => intval($year)
+                ]
+            ],
+            [
+                '$lookup' => [
+                    'from' => 'paycard',
+                    'localField' => 'payCardID',
+                    'foreignField' => 'payCardID',
+                    'as' => 'payCard'
+                ]
+            ],
+            [
+                '$project' => [
+                    'year' => ['$year' => '$tapInTime'],
+                    'month' => ['$month' => '$tapInTime'],
+                    'payAmount' => 1,
+                    'age' => ['$arrayElemAt' => ['$payCard.age', 0]],
+                    'hour' => ['$hour' => '$tapInTime']
+                ]
+            ],
+            [
+                '$match' => [
+                    'hour' => ['$ne' => null]
+                ]
+            ],
+            [
+                '$group' => [
+                    '_id' => [
+                        'ageGroup' => [
+                            '$switch' => [
+                                'branches' => [
+                                    ['case' => ['$lte' => ['$age', 17]], 'then' => '0-17'],
+                                    ['case' => ['$and' => [['$gt' => ['$age', 17]], ['$lte' => ['$age', 25]]]], 'then' => '18-25'],
+                                    ['case' => ['$and' => [['$gt' => ['$age', 25]], ['$lte' => ['$age', 35]]]], 'then' => '26-35'],
+                                    ['case' => ['$and' => [['$gt' => ['$age', 35]], ['$lte' => ['$age', 45]]]], 'then' => '36-45'],
+                                    ['case' => ['$and' => [['$gt' => ['$age', 45]], ['$lte' => ['$age', 55]]]], 'then' => '46-55'],
+                                    ['case' => ['$gt' => ['$age', 55]], 'then' => '55+']
+                                ],
+                                'default' => 'Unknown'
+                            ]
+                        ],
+                        'hour' => '$hour'
+                    ],
+                    'count' => ['$sum' => 1]
+                ]
+            ],
+            [
+                '$sort' => [
+                    '_id.ageGroup' => 1,
+                    '_id.hour' => 1
+                ]
+            ]
+        ];
+        
+
+        $results = $collection->aggregate($pipeline);
+
+        $data = [];
+        foreach ($results as $result) {
+            $hour = $result->_id['hour'];
+            $ageGroup = $result->_id['ageGroup'];
+            $count = $result->count;
+
+            if (!isset($data[$ageGroup])) {
+                $data[$ageGroup] = array_fill(0, 24, 0);
+            }
+            $data[$ageGroup][$hour] = $count;
+        }
+
+        echo json_encode($data);
+    }
+    else if (isset($_GET['type']) && $_GET['type'] == '#6'){
+        // Connect to MongoDB
+        $client = new MongoClient('mongodb://localhost:27017');
+        $collection = $client->transjakarta->paycard;
+        $pipeline = getGroupByJenisKelaminAge();
+        $result1 = $collection->aggregate($pipeline);
+        $cewek = [
+            '0-17' => 0,
+            '18-25' => 0,
+            '26-35' => 0,
+            '36-45' => 0,
+            '46-55' => 0,
+            '55+' => 0,
+        ];
+        $cowok = [
+            '0-17' => 0,
+            '18-25' => 0,
+            '26-35' => 0,
+            '36-45' => 0,
+            '46-55' => 0,
+            '55+' => 0,
+        ];
+        foreach ($result1 as $document) {
+            if ($document->_id->payCardSex == 'F')
+                $cewek[$document->_id->ageGroup] = $document->count;
+            else
+                $cowok[$document->_id->ageGroup] = $document->count;
+        }
+        $hasil = [
+            'cewek' => $cewek,
+            'cowok' => $cowok
+        ];
+        echo json_encode($hasil);
+    }
     else {
         http_response_code(400);
         echo json_encode(['error' => 'Missing required parameters']);
@@ -240,54 +356,4 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET') {
     http_response_code(405);
     echo json_encode(['error' => 'Invalid request method']);
 }
-
-
-
-// <!-- analisis trend pelanggan -->
-// <!-- y: count ride -->
-// <!-- x: bulan -->
-// <!-- grouping: harga (premium, regular)  -->
-
-// <!-- PIE CHART -->
-// <!-- rute yang sering digunakan perwaktu -->
-
-// <!-- BAR CHART -->
-// <!-- rata-rata durasi perjalanan per rute -->
-// <!-- x: top 5 rutes favoritku --> 
-// <!-- y: rata-rata durasi perjalanan ku per 5 rute favorit -->
-
-// <!-- Analisis pengeluaran per bulan -->
-// <!-- x: month -->
-// <!-- y: uang yang dikeluarkan -->
-// <!-- [
-//   // Match transactions for the specified payCardID and tapInTime range
-//   {
-//     $match: {
-//       payCardID: 5343809282239143, // Assuming payCardID is a string
-//       // hourIn: { $gte: 0, $lte: 23 }, // Assuming hourIn represents the hour of the day for tapInTime
-//       // $expr: {
-//       //   $and: [
-//       //     // Filter by tapInTime within the specified date range
-//       //     { $gte: [ { $toDate: "$tapInTime" }, ISODate("2022-12-01T00:00:00Z")] },
-//       //     { $lte: [ { $toDate: "$tapInTime" }, ISODate("2022-12-31T23:59:59Z")] }
-//       //   ]
-//       // }
-//     }
-//   },
-//   // Group transactions by month and year, calculating the sum of payAmount for each group
-//   {
-//     $group: {
-//       _id: { month: "$month"},
-//       sumPayAmount: { $sum: "$payAmount" }
-//     }
-//   },
-//   // Sort the results by month and year in ascending order
-//   {
-//     $sort: { "_id.month": 1 }
-//   }
-// ] -->
-
-// <!-- geospatial -->
-// <!-- list orang yang sering ditemui (corridor namenya sama, waktunya sama) -->
-
 ?>
