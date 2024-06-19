@@ -4,7 +4,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 use MongoDB\Client;
 
 $client = new Client();
-$transjakarta = $client->pdds->dftransjakarta;
+$transjakarta = $client->pdds->transjakarta;
 
 $year = isset($_GET['year']) ? intval($_GET['year']) : 2022;
 

@@ -515,7 +515,11 @@ include 'api/mysql_connection.php'
             scales: {
               x: {
                 stacked: false,
-                label: 'Usia'
+                label: 'Usia',
+                title: {
+                    display: true,
+                    text: 'Usia'
+                },
               },
               y: {
                 stacked: false,
