@@ -72,127 +72,90 @@ $hourlyTopStopsJson = json_encode($hourlyTopStops);
 echo "<script>const hourlyTopStops = $hourlyTopStopsJson;</script>";
 
 // Query for top 5 cards used by age group and gender
-$pipelineCards = 
+$pipelineCards = [
     [
-        [
-            '$match' => [
-                'year' => $year,
-                'payAmount' => ['$in' => [0, 3500]]
-            ]
-        ],
-        [
-            '$lookup' => [
-                'from' => 'dfpaycards',
-                'localField' => 'payCardID',
-                'foreignField' => 'payCardIDTable',
-                'as' => 'payCardDetails'
-            ]
-        ],
-        [
-            '$unwind' => '$payCardDetails'
-        ],
-        [
-            '$group' => [
-                '_id' => [
-                    'payCardBank' => '$payCardDetails.payCardBank',
-                    'ageGroup' => [
-                        '$switch' => [
-                            'branches' => [
-                                [
-                                    'case' => [
-                                        '$and' => [
-                                            ['$gte' => ['$payCardDetails.payCardBirthDate', 2000]],
-                                            ['$lte' => ['$payCardDetails.payCardBirthDate', 2007]]
-                                        ]
-                                    ],
-                                    'then' => '18-25'
-                                ],
-                                [
-                                    'case' => [
-                                        '$and' => [
-                                            ['$gte' => ['$payCardDetails.payCardBirthDate', 1990]],
-                                            ['$lte' => ['$payCardDetails.payCardBirthDate', 1999]]
-                                        ]
-                                    ],
-                                    'then' => '26-35'
-                                ],
-                                [
-                                    'case' => [
-                                        '$and' => [
-                                            ['$gte' => ['$payCardDetails.payCardBirthDate', 1980]],
-                                            ['$lte' => ['$payCardDetails.payCardBirthDate', 1989]]
-                                        ]
-                                    ],
-                                    'then' => '36-45'
-                                ],
-                                [
-                                    'case' => [
-                                        '$and' => [
-                                            ['$gte' => ['$payCardDetails.payCardBirthDate', 1970]],
-                                            ['$lte' => ['$payCardDetails.payCardBirthDate', 1979]]
-                                        ]
-                                    ],
-                                    'then' => '46-55'
-                                ],
-                                [
-                                    'case' => ['$gte' => ['$payCardDetails.payCardBirthDate', 1965]],
-                                    'then' => '56+'
-                                ],
+        '$project' => [
+            'payCardBank' => 1,
+            'ageGroup' => [
+                '$switch' => [
+                    'branches' => [
+                                ['case' => ['$lte' => ['$age', 17]], 'then' => '0-17'],
+                                ['case' => ['$and' => [['$gt' => ['$age', 17]], ['$lte' => ['$age', 25]]]], 'then' => '18-25'],
+                                ['case' => ['$and' => [['$gt' => ['$age', 25]], ['$lte' => ['$age', 35]]]], 'then' => '26-35'],
+                                ['case' => ['$and' => [['$gt' => ['$age', 35]], ['$lte' => ['$age', 45]]]], 'then' => '36-45'],
+                                ['case' => ['$and' => [['$gt' => ['$age', 45]], ['$lte' => ['$age', 55]]]], 'then' => '46-55'],
+                                ['case' => ['$gt' => ['$age', 55]], 'then' => '55+']
                             ],
-                        ]
-                    ]
-                ],
-                'totalUsage' => ['$sum' => 1]
-            ]
-        ],
-        [
-            '$sort' => [
-                '_id.ageGroup' => 1,
-                'totalUsage' => -1
-            ]
-        ],
-        [
-            '$group' => [
-                '_id' => '$_id.ageGroup',
-                'banks' => [
-                    '$push' => [
-                        'payCardBank' => '$_id.payCardBank',
-                        'totalUsage' => '$totalUsage'
-                    ]
+                    'default' => 'Unknown'
                 ]
             ]
-        ],
-        [
-            '$project' => [
-                '_id' => 0,
-                'ageGroup' => '$_id',
-                'banks' => ['$slice' => ['$banks', 5]]
-            ]
-        ],
-        [
-            '$sort' => [
-                'ageGroup' => 1
-            ]
         ]
-    ];
-    
-
+    ],
+    [
+        '$group' => [
+            '_id' => ['payCardBank' => '$payCardBank', 'ageGroup' => '$ageGroup'],
+            'usageCount' => ['$sum' => 1]
+        ]
+    ],
+    [
+        '$project' => [
+            'payCardBank' => '$_id.payCardBank',
+            'ageGroup' => '$_id.ageGroup',
+            'usageCount' => '$usageCount',
+            '_id' => 0
+        ]
+    ],
+    [
+        '$sort' => ['ageGroup' => 1, 'usageCount' => -1]
+    ],
+    [
+        '$group' => [
+            '_id' => ['ageGroup' => '$ageGroup'],
+            'cards' => ['$push' => ['payCardBank' => '$payCardBank', 'usageCount' => '$usageCount']]
+        ]
+    ],
+    [
+        '$project' => [
+            '_id' => 0,
+            'ageGroup' => '$_id.ageGroup',
+            'topCards' => ['$slice' => ['$cards', 5]]
+        ]
+    ],
+    [
+        '$unwind' => '$topCards'
+    ],
+    [
+        '$project' => [
+            'ageGroup' => '$ageGroup',
+            'payCardBank' => '$topCards.payCardBank',
+            'usageCount' => '$topCards.usageCount'
+        ]
+    ],
+    [
+        '$sort' => ['ageGroup' => 1, 'usageCount' => -1]
+    ]
+];
 
 $resultCards = $transjakarta->aggregate($pipelineCards);
-
+// echo var_dump($resultCards);
+// exit();
 $usageData = [];
-foreach ($resultCards as $doc) {
-    $ageGroup = $doc['_id']['ageGroup'];
-    $gender = $doc['_id']['gender'];
-    $count = $doc['totalUsage'];
 
+$documents = $resultCards->toArray();
+foreach ($documents as $doc) {
+
+    $ageGroup = $doc['ageGroup'];
+
+    $payCardBank = $doc['payCardBank'];
+    $count = $doc['usageCount'];
     if (!isset($usageData[$ageGroup])) {
-        $usageData[$ageGroup] = ['Male' => 0, 'Female' => 0];
+        $usageData[$ageGroup] = [];
     }
-    $usageData[$ageGroup][$gender] = $count;
+    $usageData[$ageGroup][$payCardBank] = $count;
 }
 
 $usageDataJson = json_encode($usageData);
+
 echo "<script>const usageData = $usageDataJson;</script>";
 echo "<script>const selectedYear = $year;</script>";
 ?>
@@ -250,7 +213,7 @@ echo "<script>const selectedYear = $year;</script>";
 
         document.addEventListener("DOMContentLoaded", function() {
             const ctxStops = document.getElementById('hourlyTopStopsChart').getContext('2d');
-            const ctxCards = document.getElementById('usageChart').getContext('2d');
+            // const ctxCards = document.getElementById('usageChart').getContext('2d');
 
             // Chart for top 5 stops per hour
             const hours = Object.keys(hourlyTopStops);
@@ -319,66 +282,72 @@ echo "<script>const selectedYear = $year;</script>";
             const hourlyTopStopsChart = new Chart(ctxStops, configStops);
 
             // Chart for top 5 cards used by age group and gender
-            const ageGroups = Object.keys(usageData);
-            const maleData = ageGroups.map(ageGroup => usageData[ageGroup].Male);
-            const femaleData = ageGroups.map(ageGroup => usageData[ageGroup].Female);
+            
+        var labels = [];
+        var datasets = [];
 
-            const configCards = {
-                type: 'bar',
-                data: {
-                    labels: ageGroups,
-                    datasets: [
-                        {
-                            label: 'Male',
-                            data: maleData,
-                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                            borderWidth: 1
-                        },
-                        {
-                            label: 'Female',
-                            data: femaleData,
-                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                            borderColor: 'rgba(255, 99, 132, 1)',
-                            borderWidth: 1
-                        }
-                    ]
-                },
-                options: {
-                    plugins: {
+        // console.log(usageData);
+        var index=0;
+
+        Object.keys(usageData).forEach(key => {
+            labels.push(key);
+            datasets.push({
+                label : key,
+                data: usageData[key],
+                backgroundColor: `rgba(${(index * 40) % 255}, ${(index * 40) % 255}, ${(index * index * 20) % 255}, 0.2)`,
+                borderColor: `rgba(${(index * 40) % 255}, ${(index * 40) % 255}, ${(index * index * 20) % 255}, 1)`,
+                borderWidth: 1
+            })
+            index++;
+        });
+        console.log(datasets);
+
+        // labels.forEach((ageGroup, index) => {
+        //     usageData[ageGroup].forEach((card, cardIndex) => {
+        //         datasets.push({
+        //             label: `${ageGroup} - ${card.payCardBank}`,
+        //             data: [{x: ageGroup, y: card.usageCount}],
+        //             backgroundColor: `rgba(${(index * 40) % 255}, ${(cardIndex * 40) % 255}, ${(index * cardIndex * 20) % 255}, 0.2)`,
+        //             borderColor: `rgba(${(index * 40) % 255}, ${(cardIndex * 40) % 255}, ${(index * cardIndex * 20) % 255}, 1)`,
+        //             borderWidth: 1
+        //         });
+        //     });
+        // });
+
+        const ctx = document.getElementById('usageChart').getContext('2d');
+        const usageChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                scales: {
+                    x: {
+                        stacked: true,
                         title: {
                             display: true,
-                            text: `Transaction Count by Age Group and Gender in Year ${selectedYear}`
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const label = context.dataset.label || '';
-                                    return `${label}: ${context.raw}`;
-                                }
-                            }
+                            text: 'Age Group'
                         }
                     },
-                    scales: {
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Age Group'
-                            }
-                        },
-                        y: {
-                            title: {
-                                display: true,
-                                text: 'Transaction Count'
-                            },
-                            beginAtZero: true
+                    y: {
+                        beginAtZero: true,
+                        stacked: true,
+                        title: {
+                            display: true,
+                            text: 'Usage Count'
                         }
                     }
+                },
+                plugins: {
+                    legend: {
+                        display: false // Display false for less cluttered graph, can be true for more detailed legend
+                    }
                 }
-            };
-
-            const usageChart = new Chart(ctxCards, configCards);
+            }
         });
+    });
+
     </script>
 </body>
 </html>
