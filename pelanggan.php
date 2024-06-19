@@ -235,10 +235,20 @@ include 'api/mysql_connection.php'
             </div>
           </div>
         </div>
+
+        <!-- #6 Pengelompokkan usia dan gender x=usia y = gender-->
+        <h5 style="color:#787878;padding-left: 5%;padding-right: 5%;padding-top:10px; text-align:center">Analisa User berdasarkan usia dan gender</h5>
+        <div style="padding-left: 10%;padding-right: 10%;">
+          <canvas id="BarChartPremReg2"></canvas>
+        </div>
+
+        <!-- #6 Analisa user berdasarkan usia dan waktu -->
+        <h5 style="color:#787878;padding-left: 5%;padding-right: 5%;padding-top:10px; text-align:center">Trend Transaksi berdasarkan usia dan jam</h5>
+        <div style="padding-left: 10%;padding-right: 10%;">
+          <canvas id="LineChartPremReg2"></canvas>
+        </div>
       </div>
 
-      <!-- #5 Tipe Umur dan waktu -->
-       
       <!-- Row 3 -->
       <div class="row content" style="margin: 15px;">
         <!-- Year and Hour Filter -->
@@ -258,19 +268,22 @@ include 'api/mysql_connection.php'
             <?php
             for ($i = 0; $i < 24; $i++) {
               if ($i == 6) {
-                echo '<option selected value='.$i.'>' . str_pad($i, 2, '0', STR_PAD_LEFT) . ':00 - ' . str_pad($i + 1, 2, '0', STR_PAD_LEFT) . ':00</option>';
+                echo '<option selected value=' . $i . '>' . str_pad($i, 2, '0', STR_PAD_LEFT) . ':00 - ' . str_pad($i + 1, 2, '0', STR_PAD_LEFT) . ':00</option>';
               } else {
-                echo '<option value='.$i.'>' . str_pad($i, 2, '0', STR_PAD_LEFT) . ':00 - ' . str_pad($i + 1, 2, '0', STR_PAD_LEFT) . ':00</option>';
+                echo '<option value=' . $i . '>' . str_pad($i, 2, '0', STR_PAD_LEFT) . ':00 - ' . str_pad($i + 1, 2, '0', STR_PAD_LEFT) . ':00</option>';
               }
             }
             ?>
+          </select>
+          <select id="jenisKelamin" name="jenisKelamin">
+            <option selected value="semua">semua</option>
+            <option value="F">Perempuan</option>
+            <option value="M">Laki-laki</option>
           </select>
         </div>
         <!-- #4 Top 30 Destination Popularity by time -->
         <h5 style="color:#787878;padding-left: 5%;padding-right: 5%;padding-top:10px; text-align:center">Top 30 Destinasi Terpopular berdasarkan waktu</h5>
         <div id="map"></div>
-
-        <!-- #6 Persebaran perempuan dan laki-laki berdasarkan tapInTime -->
       </div>
     </section>
   </main>
@@ -517,15 +530,19 @@ include 'api/mysql_connection.php'
                 stacked: false,
                 label: 'Usia',
                 title: {
-                    display: true,
-                    text: 'Usia'
+                  display: true,
+                  text: 'Usia'
                 },
               },
               y: {
                 stacked: false,
                 ticks: {
                   stepSize: 10,
-                }
+                },
+                title: {
+                  display: true,
+                  text: 'Jumlah Transaksi'
+                },
 
               }
             }
@@ -561,6 +578,7 @@ include 'api/mysql_connection.php'
       });
       circles = [];
     }
+
     function getAnalisisDestPopularity() {
       $.ajax({
         type: "GET",
@@ -568,24 +586,39 @@ include 'api/mysql_connection.php'
         data: {
           type: '#4',
           year: $('#yearFilter2').val(),
-          hour: $('#hourSelect').val()
+          hour: $('#hourSelect').val(),
+          jenisKelamin: $('#jenisKelamin').val()
         },
         success: function(response) {
           dataResp = JSON.parse(response)
+          jenisKelamin = $('#jenisKelamin').val()
           removeAllCircles()
-          
+
+          var mycolor;
+          var myfillcolor;
+
+          if (jenisKelamin == 'F') {
+            mycolor = 'red';
+            myfillcolor = 'red';
+          } else if (jenisKelamin == 'M') {
+            mycolor = 'blue';
+            myfillcolor = 'blue';
+          } else {
+            mycolor = '#625da4';
+            myfillcolor = '#625da4';
+          }
+
           // Add Circles to the map
           dataResp.forEach(function(data) {
-              var tempColor = 'red';
 
-              var circle = L.circle([data.latitude, data.longitude], {
-                  color: '#625da4',
-                  fillColor: '#625da4',
-                  fillOpacity: data.fillOpacity,
-                  radius: data.radius
-              }).addTo(map);
+            var circle = L.circle([data.latitude, data.longitude], {
+              color: mycolor,
+              fillColor: myfillcolor,
+              fillOpacity: data.fillOpacity,
+              radius: data.radius
+            }).addTo(map);
 
-              circles.push(circle); // Store reference to the circle in the array
+            circles.push(circle); // Store reference to the circle in the array
 
           })
         }
@@ -598,6 +631,154 @@ include 'api/mysql_connection.php'
     $('#hourSelect').on('change', function() {
       getAnalisisDestPopularity()
     })
+    $('#jenisKelamin').on('change', function() {
+      getAnalisisDestPopularity()
+    })
+
+    // #6
+    var barChartJs2;
+
+    function getAnalisisUsiaGender() {
+      $.ajax({
+        type: "GET",
+        url: "api/pelanggan.php",
+        data: {
+          type: '#6',
+        },
+        success: function(response) {
+          dataResp = JSON.parse(response)
+          if (barChartJs2) {
+            barChartJs2.destroy()
+          }
+          const barChartPremReq2 = document.getElementById('BarChartPremReg2');
+          var data = {
+            // labels: ['0 - 17 tahun', '18-25 tahun', '26-35 tahun', '36-45 tahun', '46-55 tahun', '> 55 tahun'],
+            datasets: [{
+                label: 'Perempuan',
+                data: dataResp.cewek,
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                borderWidth: 1
+              },
+              {
+                label: 'Laki-laki',
+                data: dataResp.cowok,
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+              },
+            ]
+          };
+
+          var options = {
+            responsive: true,
+            scales: {
+              x: {
+                stacked: false,
+                label: 'Usia',
+                title: {
+                  display: true,
+                  text: 'Usia'
+                },
+              },
+              y: {
+                stacked: false,
+                ticks: {
+                  stepSize: 10,
+                },
+                title: {
+                  display: true,
+                  text: 'Jumlah User'
+                },
+
+              }
+            }
+          };
+
+          barChartJs2 = new Chart(barChartPremReq2, {
+            type: 'bar',
+            data: data,
+            options: options
+          });
+        }
+      });
+    }
+    $('#yearFilter').on('change', function() {
+      getAnalisisUsiaGender()
+    })
+    getAnalisisUsiaGender()
+
+    // #5 line chart time dan umur
+    var lineChartJs2;
+
+    function getAnalisisTimeAge() {
+      $.ajax({
+        type: "GET",
+        url: "api/pelanggan.php",
+        data: {
+          type: '#5',
+          year: $('#yearFilter').val()
+        },
+        success: function(response) {
+          data = JSON.parse(response)
+          if (lineChartJs2) {
+            lineChartJs2.destroy()
+          }
+          // Menyiapkan data untuk Chart.js
+          const labels = Array.from({
+            length: 24
+          }, (_, i) => i + 1);
+          const datasets = Object.keys(data).map(ageGroup => ({
+            label: ageGroup,
+            data: data[ageGroup],
+            fill: false,
+            borderColor: getRandomColor(),
+            tension: 0.1
+          }));
+
+          // Fungsi untuk mendapatkan warna acak
+          function getRandomColor() {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+              color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+          }
+
+          // Membuat chart
+          const lineChartPremReq2 = document.getElementById('LineChartPremReg2');
+          lineChartJs2 = new Chart(lineChartPremReq2, {
+            type: 'line',
+            data: {
+              labels: labels,
+              datasets: datasets
+            },
+            options: {
+              scales: {
+                x: {
+                  title: {
+                    display: true,
+                    text: 'Hour of the Day'
+                  }
+                },
+                y: {
+                  title: {
+                    display: true,
+                    text: 'Transaction Count'
+                  },
+                  beginAtZero: true
+                }
+              }
+            }
+          });
+        }
+      });
+    }
+    $('#yearFilter').on('change', function() {
+      getAnalisisTimeAge()
+    })
+    getAnalisisTimeAge()
   </script>
 </body>
 
