@@ -218,7 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'GET') {
         $collection = $database->selectCollection('transaction3');
 
         // DestinasiPopuler
-        $pipeline = getDestinasiPopuler($year,$hour);
+        $pipeline = getDestinasiPopuler($year,$hour, 'semua');
         $result1 = $collection->aggregate($pipeline);
         $hasil = [];
         foreach ($result1 as $document) {

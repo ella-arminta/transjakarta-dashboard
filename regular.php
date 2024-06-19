@@ -5,10 +5,10 @@ use MongoDB\Client;
 
 $client = new Client();
 #felina
-$transjakarta = $client->pdds->dftransjakarta;
+// $transjakarta = $client->pdds->dftransjakarta;
 // $transjakarta = $client->pdds->transjakarta;
 #ella
-// $transjakarta = $client->transjakarta->transaction3;
+$transjakarta = $client->transjakarta->transaction3;
 
 $year = isset($_GET['year']) ? intval($_GET['year']) : 2022;
 
@@ -74,65 +74,52 @@ echo "<script>const hourlyTopStops = $hourlyTopStopsJson;</script>";
 // Query for top 5 cards used by age group and gender
 $pipelineCards = [
     [
+        '$match' => [
+            'year' => intval($year)  // Assuming 'year' is a variable in your PHP script
+        ]
+    ],
+    [
+        '$lookup' => [
+            'from' => 'paycard',
+            'localField' => 'payCardID',
+            'foreignField' => 'payCardID',
+            'as' => 'payCard'
+        ]
+    ],
+    [
         '$project' => [
-            'payCardBank' => 1,
-            'ageGroup' => [
-                '$switch' => [
-                    'branches' => [
-                                ['case' => ['$lte' => ['$age', 17]], 'then' => '0-17'],
-                                ['case' => ['$and' => [['$gt' => ['$age', 17]], ['$lte' => ['$age', 25]]]], 'then' => '18-25'],
-                                ['case' => ['$and' => [['$gt' => ['$age', 25]], ['$lte' => ['$age', 35]]]], 'then' => '26-35'],
-                                ['case' => ['$and' => [['$gt' => ['$age', 35]], ['$lte' => ['$age', 45]]]], 'then' => '36-45'],
-                                ['case' => ['$and' => [['$gt' => ['$age', 45]], ['$lte' => ['$age', 55]]]], 'then' => '46-55'],
-                                ['case' => ['$gt' => ['$age', 55]], 'then' => '55+']
-                            ],
-                    'default' => 'Unknown'
+            'year' => ['$year' => ['$dateFromString' => ['dateString' => '$tapInTime', 'format' => '%Y-%m-%d %H:%M:%S']]],
+            'month' => ['$month' => ['$dateFromString' => ['dateString' => '$tapInTime', 'format' => '%Y-%m-%d %H:%M:%S']]],
+            'payAmount' => 1,
+            'age' => ['$arrayElemAt' => ['$payCard.age', 0]],  // Retrieve the first element of the array
+            'payCardBank' => ['$arrayElemAt' => ['$payCard.payCardBank', 0]]  // Retrieve the first element of the array
+        ]
+    ],
+    [
+        '$group' => [
+            '_id' => [
+                'payCardBank' => '$payCardBank',
+                'ageGroup' => [
+                    '$switch' => [
+                        'branches' => [
+                            ['case' => ['$lte' => ['$age', 17]], 'then' => '0-17'],
+                            ['case' => ['$and' => [['$gt' => ['$age', 17]], ['$lte' => ['$age', 25]]]], 'then' => '18-25'],
+                            ['case' => ['$and' => [['$gt' => ['$age', 25]], ['$lte' => ['$age', 35]]]], 'then' => '26-35'],
+                            ['case' => ['$and' => [['$gt' => ['$age', 35]], ['$lte' => ['$age', 45]]]], 'then' => '36-45'],
+                            ['case' => ['$and' => [['$gt' => ['$age', 45]], ['$lte' => ['$age', 55]]]], 'then' => '46-55'],
+                            ['case' => ['$gt' => ['$age', 55]], 'then' => '55+']
+                        ],
+                        'default' => 'Unknown'
+                    ]
                 ]
-            ]
+            ],
+            'countTransaksi' => ['$sum' => 1]
         ]
     ],
     [
-        '$group' => [
-            '_id' => ['payCardBank' => '$payCardBank', 'ageGroup' => '$ageGroup'],
-            'usageCount' => ['$sum' => 1]
+        '$sort' => [
+            '_id.ageGroup' => 1
         ]
-    ],
-    [
-        '$project' => [
-            'payCardBank' => '$_id.payCardBank',
-            'ageGroup' => '$_id.ageGroup',
-            'usageCount' => '$usageCount',
-            '_id' => 0
-        ]
-    ],
-    [
-        '$sort' => ['ageGroup' => 1, 'usageCount' => -1]
-    ],
-    [
-        '$group' => [
-            '_id' => ['ageGroup' => '$ageGroup'],
-            'cards' => ['$push' => ['payCardBank' => '$payCardBank', 'usageCount' => '$usageCount']]
-        ]
-    ],
-    [
-        '$project' => [
-            '_id' => 0,
-            'ageGroup' => '$_id.ageGroup',
-            'topCards' => ['$slice' => ['$cards', 5]]
-        ]
-    ],
-    [
-        '$unwind' => '$topCards'
-    ],
-    [
-        '$project' => [
-            'ageGroup' => '$ageGroup',
-            'payCardBank' => '$topCards.payCardBank',
-            'usageCount' => '$topCards.usageCount'
-        ]
-    ],
-    [
-        '$sort' => ['ageGroup' => 1, 'usageCount' => -1]
     ]
 ];
 
@@ -144,10 +131,10 @@ $usageData = [];
 $documents = $resultCards->toArray();
 foreach ($documents as $doc) {
 
-    $ageGroup = $doc['ageGroup'];
+    $ageGroup = $doc->_id->ageGroup;
 
-    $payCardBank = $doc['payCardBank'];
-    $count = $doc['usageCount'];
+    $payCardBank = $doc->_id->payCardBank;
+    $count = $doc->countTransaksi;
     if (!isset($usageData[$ageGroup])) {
         $usageData[$ageGroup] = [];
     }
@@ -155,7 +142,6 @@ foreach ($documents as $doc) {
 }
 
 $usageDataJson = json_encode($usageData);
-
 echo "<script>const usageData = $usageDataJson;</script>";
 echo "<script>const selectedYear = $year;</script>";
 ?>
@@ -281,38 +267,17 @@ echo "<script>const selectedYear = $year;</script>";
 
             const hourlyTopStopsChart = new Chart(ctxStops, configStops);
 
-            // Chart for top 5 cards used by age group and gender
-            
-        var labels = [];
-        var datasets = [];
+        // Chart for top 5 cards used by age group and gender
+        var labels = Object.keys(usageData);
 
-        // console.log(usageData);
-        var index=0;
-
-        Object.keys(usageData).forEach(key => {
-            labels.push(key);
-            datasets.push({
-                label : key,
-                data: usageData[key],
-                backgroundColor: `rgba(${(index * 40) % 255}, ${(index * 40) % 255}, ${(index * index * 20) % 255}, 0.2)`,
-                borderColor: `rgba(${(index * 40) % 255}, ${(index * 40) % 255}, ${(index * index * 20) % 255}, 1)`,
-                borderWidth: 1
-            })
-            index++;
-        });
-        console.log(datasets);
-
-        // labels.forEach((ageGroup, index) => {
-        //     usageData[ageGroup].forEach((card, cardIndex) => {
-        //         datasets.push({
-        //             label: `${ageGroup} - ${card.payCardBank}`,
-        //             data: [{x: ageGroup, y: card.usageCount}],
-        //             backgroundColor: `rgba(${(index * 40) % 255}, ${(cardIndex * 40) % 255}, ${(index * cardIndex * 20) % 255}, 0.2)`,
-        //             borderColor: `rgba(${(index * 40) % 255}, ${(cardIndex * 40) % 255}, ${(index * cardIndex * 20) % 255}, 1)`,
-        //             borderWidth: 1
-        //         });
-        //     });
-        // });
+        // Extract datasets (categories with counts) for each age group
+        var datasets = Object.keys(usageData[labels[0]]).map(category => ({
+            label: category,
+            data: labels.map(label => usageData[label][category]),
+            backgroundColor: getRandomColor(), // Function to generate random colors for bars
+            borderColor: '#ffffff',  // Border color of bars
+            borderWidth: 1  // Border width of bars
+        }));
 
         const ctx = document.getElementById('usageChart').getContext('2d');
         const usageChart = new Chart(ctx, {
@@ -324,7 +289,7 @@ echo "<script>const selectedYear = $year;</script>";
             options: {
                 scales: {
                     x: {
-                        stacked: true,
+                        stacked: false,
                         title: {
                             display: true,
                             text: 'Age Group'
@@ -332,7 +297,7 @@ echo "<script>const selectedYear = $year;</script>";
                     },
                     y: {
                         beginAtZero: true,
-                        stacked: true,
+                        stacked: false,
                         title: {
                             display: true,
                             text: 'Usage Count'
@@ -341,13 +306,21 @@ echo "<script>const selectedYear = $year;</script>";
                 },
                 plugins: {
                     legend: {
-                        display: false // Display false for less cluttered graph, can be true for more detailed legend
+                        display: true // Display false for less cluttered graph, can be true for more detailed legend
                     }
                 }
             }
         });
     });
-
+    
+    function getRandomColor() {
+        const letters = '0123456789ABCDEF';
+        let color = '#';
+        for (let i = 0; i < 6; i++) {
+            color += letters[Math.floor(Math.random() * 16)];
+        }
+        return color;
+    }
     </script>
 </body>
 </html>

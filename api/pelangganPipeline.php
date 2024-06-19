@@ -742,20 +742,51 @@ function getAgePremRegDist($year){
     return $pipeline;
 }
 // #4 
-function getDestinasiPopuler($year, $hour) {
+function getDestinasiPopuler($year, $hour, $jenisKelamin) {
     $hour = intval($hour);
-    $pipeline = [
-        [
-            '$match' => [
-                'year' => intval($year),
-                '$expr' => [
-                    '$and' => [
-                        ['$gte' => [[ '$hour' => [ '$toDate' => '$tapOutTime' ]], $hour]],
-                        ['$gte' => [[ '$hour' => [ '$toDate' => '$tapOutTime' ]], $hour + 1]],
-                    ]
+    $pipeline = [];
+    if($jenisKelamin != 'semua') {
+        $pipeline = [
+            [
+                '$lookup' => [
+                    'from' => 'paycard',
+                    'localField' => 'payCardID',
+                    'foreignField' => 'payCardID',
+                    'as' => 'payCard'
+                ]
+            ],
+            [
+                '$unwind' => '$payCard'
+            ],
+            [
+                '$match' => [
+                    'year' => intval($year),
+                    '$expr' => [
+                        '$and' => [
+                            ['$gte' => [ ['$hour' => ['$toDate' => '$tapOutTime']], $hour]],
+                            ['$lt' => [ ['$hour' => ['$toDate' => '$tapOutTime']], $hour + 1]]
+                        ]
+                    ],
+                    'payCard.payCardSex' => $jenisKelamin
                 ]
             ]
-        ],
+        ];
+    } else {
+        $pipeline[] = 
+            [
+                '$match' => [
+                    'year' => intval($year),
+                    '$expr' => [
+                        '$and' => [
+                            ['$gte' => [ ['$hour' => ['$toDate' => '$tapOutTime']], $hour]],
+                            ['$lt' => [ ['$hour' => ['$toDate' => '$tapOutTime']], $hour + 1]]
+                        ]
+                    ]
+                ]
+            ];
+    }
+    
+    $pipeline = array_merge($pipeline, [
         [
             '$group' => [
                 '_id' => [
@@ -779,7 +810,7 @@ function getDestinasiPopuler($year, $hour) {
         [
             '$limit' => 30
         ]
-    ];
+    ]);
     return $pipeline;
 }
 ?>
