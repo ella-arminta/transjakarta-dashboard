@@ -5,10 +5,12 @@ use MongoDB\Client;
 
 $client = new Client();
 #felina
-// $transjakarta = $client->pdds->dftransjakarta;
-// $transjakarta = $client->pdds->transjakarta;
+$transjakarta = $client->pdds->dftransjakarta;
+$paycard = $client->pdds->paycard;
+// $paycard = $client->pdds->paycard;
+
 #ella
-$transjakarta = $client->transjakarta->transaction3;
+// $transjakarta = $client->transjakarta->transaction3;
 
 $year = isset($_GET['year']) ? intval($_GET['year']) : 2022;
 
@@ -73,26 +75,15 @@ echo "<script>const hourlyTopStops = $hourlyTopStopsJson;</script>";
 
 // Query for top 5 cards used by age group and gender
 $pipelineCards = [
-    [
-        '$match' => [
-            'year' => intval($year)  // Assuming 'year' is a variable in your PHP script
-        ]
-    ],
-    [
-        '$lookup' => [
-            'from' => 'paycard',
-            'localField' => 'payCardID',
-            'foreignField' => 'payCardID',
-            'as' => 'payCard'
-        ]
-    ],
+    // [
+    //     '$match' => [
+    //         'year' => intval($year)  // Assuming 'year' is a variable in your PHP script
+    //     ]
+    // ],
     [
         '$project' => [
-            'year' => ['$year' => ['$dateFromString' => ['dateString' => '$tapInTime', 'format' => '%Y-%m-%d %H:%M:%S']]],
-            'month' => ['$month' => ['$dateFromString' => ['dateString' => '$tapInTime', 'format' => '%Y-%m-%d %H:%M:%S']]],
-            'payAmount' => 1,
-            'age' => ['$arrayElemAt' => ['$payCard.age', 0]],  // Retrieve the first element of the array
-            'payCardBank' => ['$arrayElemAt' => ['$payCard.payCardBank', 0]]  // Retrieve the first element of the array
+            'age' => 1,  // Directly use the age field
+            'payCardBank' => 1
         ]
     ],
     [
@@ -113,7 +104,7 @@ $pipelineCards = [
                     ]
                 ]
             ],
-            'countTransaksi' => ['$sum' => 1]
+            'count' => ['$sum' => 1]
         ]
     ],
     [
@@ -123,26 +114,32 @@ $pipelineCards = [
     ]
 ];
 
-$resultCards = $transjakarta->aggregate($pipelineCards);
-// echo var_dump($resultCards);
+$resultCards = $paycard->aggregate($pipelineCards);
+// echo var_dump($resultCards->toArray());
 // exit();
-$usageData = [];
+$usageData = [
+    // '0-17' => ['flazz' => 10, 'otherBank' => 5],
+    // '18-25' => ['flazz' => 20, 'otherBank' => 15],
+    // // Tambahkan lebih banyak grup usia jika perlu
+];
 
-$documents = $resultCards->toArray();
-foreach ($documents as $doc) {
-
+// $documents = $resultCards->toArray();
+foreach ($resultCards as $doc) {
+// echo "hi";
     $ageGroup = $doc->_id->ageGroup;
 
     $payCardBank = $doc->_id->payCardBank;
-    $count = $doc->countTransaksi;
+    $count = $doc->count;
     if (!isset($usageData[$ageGroup])) {
         $usageData[$ageGroup] = [];
     }
     $usageData[$ageGroup][$payCardBank] = $count;
 }
-
+//  echo var_dump($usageData);
+// exit();
 $usageDataJson = json_encode($usageData);
 echo "<script>const usageData = $usageDataJson;</script>";
+
 echo "<script>const selectedYear = $year;</script>";
 ?>
 <!DOCTYPE html>
@@ -267,8 +264,25 @@ echo "<script>const selectedYear = $year;</script>";
 
             const hourlyTopStopsChart = new Chart(ctxStops, configStops);
 
+        //     if (!usageData || Object.keys(usageData).length === 0) {
+        // console.error("No data available to display the chart.");
+        // return;
+    // }
+
         // Chart for top 5 cards used by age group and gender
         var labels = Object.keys(usageData);
+
+        // echo console.log(labels);
+
+    // Ensure labels array is not empty
+    if (labels.length === 0) {
+        console.error("No labels found in usageData.");
+        return;
+    }
+
+        console.log("Labels:", labels);
+        console.log("UsageData:", usageData);
+
 
         // Extract datasets (categories with counts) for each age group
         var datasets = Object.keys(usageData[labels[0]]).map(category => ({
